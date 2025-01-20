@@ -1,0 +1,20 @@
+{
+  "name": "senpaisync-server",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@hono/zod-validator": "^0.4.2",
+    "@prisma/client": "^6.2.1",
+    "better-auth": "^1.1.14",
+    "hono": "^4.6.17",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "prisma": "^6.2.1",
+    "tsx": "^4.7.1"
+  }
+}
