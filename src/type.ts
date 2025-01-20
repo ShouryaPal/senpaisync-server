@@ -13,3 +13,7 @@ export interface UpdatePasswordBody {
   currentPassword: string;
   newPassword: string;
 }
+
+export interface CheckEmailBody {
+  email: string;
+}

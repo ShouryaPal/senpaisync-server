@@ -2,7 +2,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { auth } from "../auth";
-import type { SignUpBody, SignInBody, UpdatePasswordBody } from "../type";
+import type {
+  SignUpBody,
+  SignInBody,
+  UpdatePasswordBody,
+  CheckEmailBody,
+} from "../type";
+import prisma from "../prisma";
 
 const authRouter = new Hono();
 
@@ -15,6 +21,10 @@ const signUpSchema = z.object({
 const signInSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+});
+
+const checkEmailSchema = z.object({
+  email: z.string().email(),
 });
 
 authRouter.post("/signup", zValidator("json", signUpSchema), async (c) => {
@@ -88,6 +98,48 @@ authRouter.post("/signin", zValidator("json", signInSchema), async (c) => {
     );
   }
 });
+
+authRouter.post(
+  "/check-email",
+  zValidator("json", checkEmailSchema),
+  async (c) => {
+    try {
+      const { email } = await c.req.json<CheckEmailBody>();
+
+      // Check if user exists with this email
+      const user = await prisma.user.findUnique({
+        where: {
+          email: email,
+        },
+        select: {
+          id: true, // Only select the id to minimize data transfer
+        },
+      });
+
+      return c.json({
+        success: true,
+        exists: !!user, // Convert to boolean
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        return c.json(
+          {
+            success: false,
+            error: error.message,
+          },
+          400,
+        );
+      }
+      return c.json(
+        {
+          success: false,
+          error: "An unknown error occurred",
+        },
+        500,
+      );
+    }
+  },
+);
 
 // Get session route
 // authRouter.get("/session", async (c) => {
