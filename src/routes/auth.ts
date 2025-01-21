@@ -106,19 +106,18 @@ authRouter.post(
     try {
       const { email } = await c.req.json<CheckEmailBody>();
 
-      // Check if user exists with this email
       const user = await prisma.user.findUnique({
         where: {
           email: email,
         },
         select: {
-          id: true, // Only select the id to minimize data transfer
+          id: true,
         },
       });
 
       return c.json({
         success: true,
-        exists: !!user, // Convert to boolean
+        exists: !!user,
       });
     } catch (error) {
       if (error instanceof Error) {
@@ -141,36 +140,35 @@ authRouter.post(
   },
 );
 
-// Get session route
-// authRouter.get("/session", async (c) => {
-//   try {
-//     const session = await auth.api.getSession({
-//       headers: c.req.header(),
-//     });
+authRouter.get("/session", async (c) => {
+  try {
+    const session = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
 
-//     return c.json({
-//       success: true,
-//       session,
-//     });
-//   } catch (error) {
-//     if (error instanceof Error) {
-//       return c.json(
-//         {
-//           success: false,
-//           error: error.message,
-//         },
-//         401,
-//       );
-//     }
-//     return c.json(
-//       {
-//         success: false,
-//         error: "An unknown error occurred",
-//       },
-//       500,
-//     );
-//   }
-// });
+    return c.json({
+      success: true,
+      session,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      return c.json(
+        {
+          success: false,
+          error: error.message,
+        },
+        401,
+      );
+    }
+    return c.json(
+      {
+        success: false,
+        error: "An unknown error occurred",
+      },
+      500,
+    );
+  }
+});
 
 // // Sign out route
 // authRouter.post("/signout", async (c) => {
