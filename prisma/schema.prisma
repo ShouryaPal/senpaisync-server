@@ -8,15 +8,16 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid()) // Changed to String to match relations
+  id            String      @id @default(uuid())
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false) // Added default
+  email         String      @unique
+  emailVerified Boolean     @default(false)
   image         String?
-  createdAt     DateTime  @default(now()) // Added default
-  updatedAt     DateTime  @updatedAt // Added updatedAt attribute
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   sessions      Session[]
   accounts      Account[]
+  QuickLink     QuickLink[]
 
   @@map("user")
 }
@@ -64,4 +65,16 @@ model Verification {
   updatedAt  DateTime? @updatedAt
 
   @@map("verification")
+}
+
+model QuickLink {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("quick_link")
 }

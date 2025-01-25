@@ -2,24 +2,23 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { authRouter } from "./routes/auth";
-// import { requireAuth } from "./middleware/auth";
+import { quickLinkRouter } from "./routes/quicklink";
 
 const app = new Hono();
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE"],
+    allowHeaders: ["Authorization", "Content-Type"],
+    credentials: true,
+  }),
+);
 
 // Routes
 app.route("/api/auth", authRouter);
-
-// app.get("/api/protected", requireAuth, (c) => {
-//   const user = c.get("user");
-//   return c.json({
-//     success: true,
-//     message: "Protected data",
-//     user,
-//   });
-// });
+app.route("/api/quick-links", quickLinkRouter);
 
 // Start server
 const port = process.env.PORT || 3000;
@@ -29,5 +28,3 @@ serve({
   fetch: app.fetch,
   port: Number(port),
 });
-
-export type AppType = typeof app;
