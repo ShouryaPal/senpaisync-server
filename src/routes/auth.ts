@@ -79,6 +79,7 @@ authRouter.post("/signin", zValidator("json", signInSchema), async (c) => {
       success: true,
       session,
     });
+    console.log("user signin successfull");
   } catch (error) {
     if (error instanceof Error) {
       return c.json(
@@ -142,31 +143,33 @@ authRouter.post(
 
 authRouter.get("/session", async (c) => {
   try {
-    const session = await auth.api.getSession({
-      headers: c.req.raw.headers,
+    const token = c.req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!token) {
+      return c.json({ success: false, error: "Missing token" }, 401);
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { token },
+      include: { user: true },
     });
 
+    if (!session || session.expiresAt < new Date()) {
+      return c.json({ success: false, error: "Invalid session" }, 401);
+    }
+
+    console.log(session.token, session.user);
     return c.json({
       success: true,
-      session,
+      session: {
+        token: session.token,
+        user: session.user,
+        expiresAt: session.expiresAt,
+      },
     });
   } catch (error) {
-    if (error instanceof Error) {
-      return c.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        401,
-      );
-    }
-    return c.json(
-      {
-        success: false,
-        error: "An unknown error occurred",
-      },
-      500,
-    );
+    console.error("Session error:", error);
+    return c.json({ success: false, error: "Server error" }, 500);
   }
 });
 
