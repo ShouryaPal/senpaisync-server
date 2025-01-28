@@ -1,75 +1,174 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { auth } from "../auth";
 import prisma from "../prisma";
-import { requireAuth } from "../middleware/auth";
 
-const quickLinkRouter = new Hono();
+// Define types for the router
+type Variables = {
+  user: {
+    id: string;
+    email: string;
+    name?: string;
+  };
+  session: {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+  };
+};
 
+// Create router with typed variables
+const quickLinkRouter = new Hono<{
+  Variables: Variables;
+}>();
+
+// Validation schemas
 const quickLinkSchema = z.object({
-  name: z.string().min(1),
-  url: z.string().url(),
+  name: z.string().min(1, "Name is required"),
+  url: z.string().url("Invalid URL format"),
 });
 
-quickLinkRouter.post(
-  "/",
-  requireAuth,
-  zValidator("json", quickLinkSchema),
-  async (c) => {
-    try {
-      const { name, url } = await c.req.json();
-      const user = c.get("user");
+const updateQuickLinkSchema = z.object({
+  name: z.string().min(1, "Name is required").optional(),
+  url: z.string().url("Invalid URL format").optional(),
+});
 
-      const quickLink = await prisma.quickLink.create({
-        data: {
-          name,
-          url,
-          userId: user.id,
-        },
-      });
-
-      return c.json({
-        success: true,
-        quickLink,
-      });
-    } catch (error) {
-      if (error instanceof Error) {
-        return c.json(
-          {
-            success: false,
-            error: error.message,
-          },
-          400,
-        );
-      }
+// Create Quick Link
+quickLinkRouter.post("/", zValidator("json", quickLinkSchema), async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user || !user.id) {
       return c.json(
         {
           success: false,
-          error: "An unknown error occurred",
+          error: "Unauthorized",
         },
-        500,
+        401,
       );
     }
-  },
-);
 
-// Get All Quick Links for the User
-quickLinkRouter.get("/", requireAuth, async (c) => {
-  try {
-    const user = c.get("user");
+    const { name, url } = await c.req.json();
 
-    const quickLinks = await prisma.quickLink.findMany({
-      where: {
+    const quickLink = await prisma.quickLink.create({
+      data: {
+        name,
+        url,
         userId: user.id,
       },
     });
 
     return c.json({
       success: true,
-      quickLinks,
+      data: quickLink,
     });
   } catch (error) {
+    console.error("Error creating quick link:", error);
+    if (error instanceof Error) {
+      return c.json(
+        {
+          success: false,
+          error: error.message,
+        },
+        400,
+      );
+    }
+    return c.json(
+      {
+        success: false,
+        error: "An unknown error occurred",
+      },
+      500,
+    );
+  }
+});
+
+// Get All Quick Links
+quickLinkRouter.get("/", async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user || !user.id) {
+      return c.json(
+        {
+          success: false,
+          error: "Unauthorized",
+        },
+        401,
+      );
+    }
+
+    const quickLinks = await prisma.quickLink.findMany({
+      where: {
+        userId: user.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return c.json({
+      success: true,
+      data: quickLinks,
+    });
+  } catch (error) {
+    console.error("Error fetching quick links:", error);
+    if (error instanceof Error) {
+      return c.json(
+        {
+          success: false,
+          error: error.message,
+        },
+        400,
+      );
+    }
+    return c.json(
+      {
+        success: false,
+        error: "An unknown error occurred",
+      },
+      500,
+    );
+  }
+});
+
+// Get Single Quick Link
+quickLinkRouter.get("/:id", async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user || !user.id) {
+      return c.json(
+        {
+          success: false,
+          error: "Unauthorized",
+        },
+        401,
+      );
+    }
+
+    const { id } = c.req.param();
+
+    const quickLink = await prisma.quickLink.findUnique({
+      where: {
+        id,
+        userId: user.id,
+      },
+    });
+
+    if (!quickLink) {
+      return c.json(
+        {
+          success: false,
+          error: "Quick link not found",
+        },
+        404,
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: quickLink,
+    });
+  } catch (error) {
+    console.error("Error fetching quick link:", error);
     if (error instanceof Error) {
       return c.json(
         {
@@ -90,65 +189,124 @@ quickLinkRouter.get("/", requireAuth, async (c) => {
 });
 
 // Update Quick Link
-quickLinkRouter.put("/:id", requireAuth, async (c) => {
-  try {
-    const { id } = c.req.param();
-    const { name, url } = await c.req.json();
-    const user = c.get("user");
+quickLinkRouter.put(
+  "/:id",
+  zValidator("json", updateQuickLinkSchema),
+  async (c) => {
+    try {
+      const user = c.get("user");
+      if (!user || !user.id) {
+        return c.json(
+          {
+            success: false,
+            error: "Unauthorized",
+          },
+          401,
+        );
+      }
 
-    const quickLink = await prisma.quickLink.update({
-      where: {
-        id,
-        userId: user.id, // Ensure the user owns the Quick Link
-      },
-      data: {
-        name,
-        url,
-      },
-    });
+      const { id } = c.req.param();
+      const updateData = await c.req.json();
 
-    return c.json({
-      success: true,
-      quickLink,
-    });
-  } catch (error) {
-    if (error instanceof Error) {
+      // Check if the quick link exists and belongs to the user
+      const existingQuickLink = await prisma.quickLink.findUnique({
+        where: {
+          id,
+          userId: user.id,
+        },
+      });
+
+      if (!existingQuickLink) {
+        return c.json(
+          {
+            success: false,
+            error: "Quick link not found",
+          },
+          404,
+        );
+      }
+
+      const updatedQuickLink = await prisma.quickLink.update({
+        where: {
+          id,
+          userId: user.id,
+        },
+        data: updateData,
+      });
+
+      return c.json({
+        success: true,
+        data: updatedQuickLink,
+      });
+    } catch (error) {
+      console.error("Error updating quick link:", error);
+      if (error instanceof Error) {
+        return c.json(
+          {
+            success: false,
+            error: error.message,
+          },
+          400,
+        );
+      }
       return c.json(
         {
           success: false,
-          error: error.message,
+          error: "An unknown error occurred",
         },
-        400,
+        500,
       );
     }
-    return c.json(
-      {
-        success: false,
-        error: "An unknown error occurred",
-      },
-      500,
-    );
-  }
-});
+  },
+);
 
 // Delete Quick Link
-quickLinkRouter.delete("/:id", requireAuth, async (c) => {
+quickLinkRouter.delete("/:id", async (c) => {
   try {
-    const { id } = c.req.param();
     const user = c.get("user");
+    if (!user || !user.id) {
+      return c.json(
+        {
+          success: false,
+          error: "Unauthorized",
+        },
+        401,
+      );
+    }
+
+    const { id } = c.req.param();
+
+    // Check if the quick link exists and belongs to the user
+    const existingQuickLink = await prisma.quickLink.findUnique({
+      where: {
+        id,
+        userId: user.id,
+      },
+    });
+
+    if (!existingQuickLink) {
+      return c.json(
+        {
+          success: false,
+          error: "Quick link not found",
+        },
+        404,
+      );
+    }
 
     await prisma.quickLink.delete({
       where: {
         id,
-        userId: user.id, // Ensure the user owns the Quick Link
+        userId: user.id,
       },
     });
 
     return c.json({
       success: true,
-      message: "Quick Link deleted successfully",
+      message: "Quick link deleted successfully",
     });
   } catch (error) {
+    console.error("Error deleting quick link:", error);
     if (error instanceof Error) {
       return c.json(
         {
